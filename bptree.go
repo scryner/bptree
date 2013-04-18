@@ -22,48 +22,8 @@ type Elem interface {
 	Key() Key
 }
 
-type Elems []Elem
-
-func (elems Elems) Len() int { return len(elems) }
-func (elems Elems) Less(i, j int) bool {
-	cond := elems[i].Key().CompareTo(elems[j].Key())
-	return cond == Less
-}
-
-func (elems Elems) Swap(i, j int) { elems[i], elems[j] = elems[j], elems[i] }
-
-func (elems Elems) insert(elem Elem, maxDegree int, allowOverlap bool) (Elems, error) {
-	var equal bool
-
-	idx := sort.Search(len(elems), func(i int) bool {
-		cond := elems[i].Key().CompareTo(elem.Key())
-		if cond == Equal {
-			equal = true
-		}
-
-		return cond == Equal || cond == Greater
-	})
-
-	if idx >= len(elems) {
-		elems = append(elems, elem)
-		return elems, nil
-	}
-
-	if equal && !allowOverlap {
-		return nil, errors.New("element overlapped")
-	}
-
-	newElems := make(Elems, len(elems)+1, maxDegree+1)
-
-	copy(newElems, elems[:idx])
-	newElems[idx] = elem
-	copy(newElems[i+1:], elems[i:])
-
-	return newElems, nil
-}
-
 type Bptree struct {
-	root *node
+	root *indexNode
 
 	maxDegree int
 
@@ -72,53 +32,24 @@ type Bptree struct {
 
 	allowOverlap bool
 
-	lock *sync.Mutex
+	lock *sync.RWMutex
 
 	initialized bool
 }
 
-type indexNode struct {
-	children Elems
-	next     *indexNode
-
-	isInternal bool
-
-	depthToLeaf int
-}
-
-// return smallest key in sub-tree
-func (node *indexNode) Key() Key {
-	if len(node.children) < 1 {
-		panic("must having children")
-	}
-
-	var elem Elem
-	var n *indexNode
-	var ok bool
-
-	for {
-		elem = n.children[0]
-		n, ok = elem.(*indexNode)
-
-		if !ok {
-			return elem.Key()
-		}
-	}
-}
-
 func NewBptree(maxDegree, maxDepth int, allowOverlap bool) (*Bptree, error) {
 	if maxDegree < 3 {
-		return errors.New("max degree must to have more than 3")
+		return nil, errors.New("max degree must to have more than 3")
 	}
 
 	if maxDepth < 0 {
-		return errors.New("max depth must to have zero or a positive value")
+		return nil, errors.New("max depth must to have zero or a positive value")
 	}
 
 	return &Bptree{
 		maxDegree:   maxDegree,
 		maxDepth:    maxDepth,
-		lock:        new(sync.Mutex),
+		lock:        new(sync.RWMutex),
 		initialized: true,
 	}, nil
 }
@@ -135,6 +66,7 @@ func (tree *Bptree) Insert(elem Elem) error {
 			depthToLeaf: 0,
 			isInternal:  false,
 			next:        nil,
+			prev:        nil,
 		}
 
 		rnode.children = append(rnode.children, elem)
@@ -144,7 +76,7 @@ func (tree *Bptree) Insert(elem Elem) error {
 	}
 
 	// find paths pass by
-	paths, err := tree.find(elem.Key())
+	paths, err := tree.findToInsert(elem.Key())
 	if err != nil {
 		return err
 	}
@@ -170,6 +102,7 @@ func (tree *Bptree) Insert(elem Elem) error {
 		}
 
 		if len(path.children) > allowedDegree {
+			// fmt.Println("rebalancing:", paths[:i+1])
 			err = tree.balance(paths[:i+1])
 			if err != nil {
 				return err
@@ -180,64 +113,154 @@ func (tree *Bptree) Insert(elem Elem) error {
 	return nil
 }
 
+/*
+func (tree *Bptree) Remove(key Key) error {
+	if !tree.initialized {
+		return errors.New("Bptree is not initialized")
+	}
+
+	// find paths
+	paths, err := tree.findToPlace(key)
+	if err != nil {
+		return err
+	}
+
+}
+
 func (tree *Bptree) Search(key Key) (Elem, bool, error) {
 
 }
+*/
 
-func (tree *Bptree) Remove(key Key) error {
+func (tree *Bptree) find(key Key, idxAdjust func(*indexNode, int, bool) (int, error)) (paths []*indexNode, err error) {
+	paths = make([]*indexNode, 0, tree.maxDepth)
 
-}
+	node := tree.root
+	if node == nil {
+		panic("yet initialized") // must be never reached
+	}
 
-func (tree *Bptree) find(key Key) (path []*indexNode, err error) {
-	path = make([]*indexNode, 0, tree.maxDepth)
+	for node != nil {
+		paths = append(paths, node)
+
+		if !node.isInternal {
+			break
+		}
+
+		elems := node.children
+
+		var isEqual bool = false
+
+		idx := sort.Search(len(elems), func(i int) bool {
+			cond := elems[i].Key().CompareTo(key)
+
+			if cond == Equal {
+				isEqual = true
+			}
+
+			return cond == Equal || cond == Greater
+		})
+
+		idx, err = idxAdjust(node, idx, isEqual)
+		if err != nil {
+			return
+		}
+
+		node = elems[idx].(*indexNode)
+	}
 
 	return
+}
+
+func (tree *Bptree) findToInsert(key Key) (paths []*indexNode, err error) {
+	return tree.find(key, func(node *indexNode, idx int, isEqual bool) (int, error) {
+		if isEqual && !tree.allowOverlap {
+			return 0, errors.New("element overlapped")
+		}
+
+		idx -= 1
+		if idx < 0 {
+			idx = 0
+		}
+
+		return idx, nil
+	})
+}
+
+func (tree *Bptree) findToRemove(key Key) (paths []*indexNode, err error) {
+	return tree.find(key, func(node *indexNode, idx int, isEqual bool) (int, error) {
+		if !isEqual {
+			if !node.isInternal {
+				return 0, errors.New("not found")
+			}
+
+			idx -= 1
+			if idx < 0 {
+				idx = 0
+			}
+		}
+
+		return idx, nil
+	})
 }
 
 func (tree *Bptree) balance(paths []*indexNode) error {
 	lenPaths := len(paths)
 
-	switch {
-	case lenPaths == 0:
+	if lenPaths == 0 {
 		return errors.New("paths are empty")
-
-	case lenPaths == 1:
-		// given paths have only root
-		oldRoot := paths[0]
-
-		newRoot := &indexNode{
-			children:    make([]Elem, 0, tree.maxDegree+1),
-			depthToLeaf: oldRoot.depthToLeaf + 1,
-			isInternal:  false,
-			next:        nil,
-		}
-
-		oldChildren := oldRoot.children
-		mid := len(oldChildren) / 2
-
-		next = &indexNode{
-			children:    make([]ELem, len(oldChildren)-mid, tree.maxDegree+1),
-			depthToLeaf: oldRoot.depthToLeaf,
-			isInternal:  oldRoot.isInternal,
-			next:        nil,
-		}
-
-		oldRoot.children = oldChildren[:mid]
-		copy(next.children, oldChildren[mid:])
-		oldRoot.next = next
-
-		newRoot.children = append(newRoot.children, oldRoot, next)
-
-	case lenPaths > 1:
-		prev := paths[lenPaths-2]
-		curr := paths[lenPaths-1]
-
-		if len(curr.children) <= tree.maxDegree {
-			// actually, never reached
-			return nil
-		}
-
 	}
+
+	var parent, curr, next *indexNode
+
+	switch {
+	case lenPaths == 1: // at root node
+		// creating a new root node
+		curr = paths[0]
+
+		parent = &indexNode{
+			children:    make([]Elem, 0, tree.maxDegree+1),
+			depthToLeaf: curr.depthToLeaf + 1,
+			isInternal:  true,
+			next:        nil,
+			prev:        nil,
+		}
+
+		parent.children = append(parent.children, curr)
+		tree.root = parent
+
+	default:
+		parent = paths[lenPaths-2]
+		curr = paths[lenPaths-1]
+	}
+
+	currChildren := curr.children
+	mid := len(currChildren) / 2
+
+	next = &indexNode{
+		children:    make([]Elem, len(currChildren)-mid, tree.maxDegree+1),
+		depthToLeaf: curr.depthToLeaf,
+		isInternal:  curr.isInternal,
+		next:        nil,
+		prev:        curr,
+	}
+
+	curr.children = currChildren[:mid]
+	copy(next.children, currChildren[mid:])
+	curr.next = next
+
+	newParentChildren, err := parent.children.insert(next, tree.maxDegree, tree.allowOverlap)
+	if err != nil {
+		return err
+	}
+
+	parent.children = newParentChildren
+
+	/*
+		fmt.Println("curr:", curr)
+		fmt.Println("next:", next)
+		fmt.Println("parent:", parent)
+	*/
 
 	return nil
 }
