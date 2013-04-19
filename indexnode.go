@@ -18,6 +18,15 @@ type indexNode struct {
 
 // return smallest key in sub-tree
 func (node *indexNode) Key() Key {
+	defer func() {
+		if e := recover(); e != nil {
+			fmt.Println("**** catch:", e)
+			fmt.Printf("***** node: %v\n\n", node)
+			panic("panic")
+		}
+
+	}()
+
 	var n *indexNode = node
 
 	for n.isInternal {

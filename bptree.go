@@ -127,16 +127,17 @@ func (tree *Bptree) Remove(key Key) error {
 	// delete the element at belong node
 	lastPath := paths[len(paths)-1]
 
-	lastPath.children, err = lastPath.children.delete(key, maxDegree)
-	if err != nil {
-		return err
+	var ok bool
+	lastPath.children, ok = lastPath.children.delete(key, tree.maxDegree)
+	if !ok {
+		panic("element must be existed")
 	}
+
+	var allowedDegree int
 
 	// do balancing if index node has children less than tree.maxDegree / 2
 	for i := len(paths) - 1; i >= 0; i-- {
 		path := paths[i]
-
-		var allowedDegree int
 
 		if path.isInternal {
 			allowedDegree = tree.maxDegree / 2
@@ -172,7 +173,7 @@ func (tree *Bptree) Remove(key Key) error {
 		}
 	}
 
-	return
+	return nil
 }
 
 /*
@@ -186,7 +187,7 @@ func (tree *Bptree) find(key Key, idxAdjust func(*indexNode, int, bool) (int, er
 
 	node := tree.root
 	if node == nil {
-		return -1, errors.New("empty tree")
+		return nil, errors.New("empty tree")
 	}
 
 	for node != nil {
@@ -429,7 +430,7 @@ func (tree *Bptree) merge(paths []*indexNode) error {
 		lSibling.next = curr.next
 		curr.next.prev = lSibling
 
-		parent.children, _ := parent.children.delete(curr.Key(), tree.maxDegree)
+		parent.children, _ = parent.children.delete(curr.Key(), tree.maxDegree)
 	} else {
 		// merging with right sibling
 		if len(rSibling.children)+len(curr.children) > allowedDegree {
@@ -440,10 +441,10 @@ func (tree *Bptree) merge(paths []*indexNode) error {
 		rSibling.prev = curr.prev
 		curr.prev.next = rSibling
 
-		parent.children, _ := parent.children.delete(curr.Key(), tree.maxDegree)
+		parent.children, _ = parent.children.delete(curr.Key(), tree.maxDegree)
 	}
 
-	return true
+	return nil
 }
 
 func (tree *Bptree) findSiblings(parent, curr *indexNode) (left, right *indexNode) {
@@ -455,11 +456,11 @@ func (tree *Bptree) findSiblings(parent, curr *indexNode) (left, right *indexNod
 	}
 
 	if i != 0 {
-		left = parent.children[i-1]
+		left = parent.children[i-1].(*indexNode)
 	}
 
 	if i != pChildrenLen-1 {
-		right = parent.children(pChildrenLen - 1)
+		right = parent.children[pChildrenLen-1].(*indexNode)
 	}
 
 	return

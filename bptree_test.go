@@ -90,6 +90,7 @@ func TestInternalFindToInsert(t *testing.T) {
 
 }
 
+/*
 func TestInternalFindToRemove(t *testing.T) {
 	k := testKey(2)
 
@@ -102,6 +103,22 @@ func TestInternalFindToRemove(t *testing.T) {
 	fmt.Println("root:", _tree.root)
 
 	fmt.Println("paths:", paths)
+	printTree(_tree)
+}
+*/
+
+func TestRemove(t *testing.T) {
+	printTree(_tree)
+	fmt.Println("root:", _tree.root)
+
+	k := testKey(2)
+
+	err := _tree.Remove(k)
+	if err != nil {
+		t.Errorf("while removing:", err)
+		t.Fail()
+	}
+
 	printTree(_tree)
 }
 
