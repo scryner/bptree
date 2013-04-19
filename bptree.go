@@ -23,6 +23,13 @@ type Elem interface {
 	Key() Key
 }
 
+var (
+	ERR_NOT_INITIALIZED = errors.New("Bptree is not initialized")
+	ERR_EMPTY           = errors.New("empty tree")
+	ERR_NOT_FOUND       = errors.New("not found")
+	ERR_NOT_OVERLAPPED  = errors.New("element overlapped")
+)
+
 type Bptree struct {
 	root *indexNode
 
@@ -57,7 +64,7 @@ func NewBptree(maxDegree, maxDepth int, allowOverlap bool) (*Bptree, error) {
 
 func (tree *Bptree) Insert(elem Elem) error {
 	if !tree.initialized {
-		return errors.New("Bptree is not initialized")
+		return ERR_NOT_INITIALIZED
 	}
 
 	// create root node if it is not exist
@@ -116,11 +123,11 @@ func (tree *Bptree) Insert(elem Elem) error {
 
 func (tree *Bptree) Remove(key Key) error {
 	if !tree.initialized {
-		return errors.New("Bptree is not initialized")
+		return ERR_NOT_INITIALIZED
 	}
 
 	// find paths
-	paths, err := tree.findToRemove(key)
+	paths, err := tree.findToExactElem(key)
 	if err != nil {
 		return err
 	}
@@ -190,11 +197,52 @@ func (tree *Bptree) Remove(key Key) error {
 	return nil
 }
 
-/*
-func (tree *Bptree) Search(key Key) (Elem, bool, error) {
+func (tree *Bptree) SearchElem(key Key) (elem Elem, ok bool, err error) {
+	var res *SearchResult
 
+	res, ok, err = tree.Search(key)
+	if err != nil || !ok {
+		return
+	}
+
+	elem = res.Elem()
+
+	return
 }
-*/
+
+func (tree *Bptree) Search(key Key) (res *SearchResult, ok bool, err error) {
+	if !tree.initialized {
+		err = ERR_NOT_INITIALIZED
+		return
+	}
+
+	// find paths
+	paths, e := tree.findToExactElem(key)
+	if e != nil && e != ERR_NOT_FOUND {
+		err = e
+		return
+	}
+
+	if len(paths) == 0 {
+		return
+	}
+
+	node := paths[len(paths)-1]
+
+	i, equal := node.children.find(key)
+	if !equal {
+		return
+	}
+
+	res = &SearchResult{
+		node: node,
+		i:    i,
+	}
+
+	ok = true
+
+	return
+}
 
 func (tree *Bptree) find(key Key, idxAdjust func(*indexNode, int, bool) (int, error)) (paths []*indexNode, err error) {
 	paths = make([]*indexNode, 0, tree.maxDepth)
@@ -239,7 +287,7 @@ func (tree *Bptree) find(key Key, idxAdjust func(*indexNode, int, bool) (int, er
 func (tree *Bptree) findToInsert(key Key) (paths []*indexNode, err error) {
 	return tree.find(key, func(node *indexNode, idx int, isEqual bool) (int, error) {
 		if isEqual && !tree.allowOverlap {
-			return -1, errors.New("element overlapped")
+			return -1, ERR_NOT_OVERLAPPED
 		}
 
 		idx -= 1
@@ -251,11 +299,11 @@ func (tree *Bptree) findToInsert(key Key) (paths []*indexNode, err error) {
 	})
 }
 
-func (tree *Bptree) findToRemove(key Key) (paths []*indexNode, err error) {
+func (tree *Bptree) findToExactElem(key Key) (paths []*indexNode, err error) {
 	return tree.find(key, func(node *indexNode, idx int, isEqual bool) (int, error) {
 		if !isEqual {
 			if !node.isInternal {
-				return -1, errors.New("not found")
+				return -1, ERR_NOT_FOUND
 			}
 
 			idx -= 1

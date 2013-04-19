@@ -40,6 +40,37 @@ func (ele *testElem) Key() Key {
 	return testKey(ele.val)
 }
 
+func printTree(tree *Bptree) error {
+	node := tree.root
+
+	for node != nil {
+		if !node.isInternal {
+			break
+		}
+
+		node = node.children[0].(*indexNode)
+	}
+
+	if node == nil {
+		return fmt.Errorf("tree is nil")
+	}
+
+	i := 0
+
+	for node != nil {
+		fmt.Println("---", i)
+
+		for _, child := range node.children {
+			fmt.Printf("\t%v\n", child)
+		}
+
+		node = node.next
+		i += 1
+	}
+
+	return nil
+}
+
 func TestInit(t *testing.T) {
 	var err error
 
@@ -108,8 +139,8 @@ func TestInternalFindToRemove(t *testing.T) {
 */
 
 func TestRemove(t *testing.T) {
-	printTree(_tree)
-	fmt.Println("root:", _tree.root)
+	// printTree(_tree)
+	// fmt.Println("root:", _tree.root)
 
 	k := testKey(2)
 
@@ -119,38 +150,63 @@ func TestRemove(t *testing.T) {
 		t.Fail()
 	}
 
-	printTree(_tree)
+	// printTree(_tree)
 }
 
-func printTree(tree *Bptree) error {
-	node := tree.root
+func TestSearchElem(t *testing.T) {
+	k1 := testKey(2)
+	k2 := testKey(50)
 
-	for node != nil {
-		if !node.isInternal {
-			break
-		}
-
-		node = node.children[0].(*indexNode)
+	_, ok, err := _tree.SearchElem(k1)
+	if err != nil {
+		t.Errorf("while searching elem:", err)
+		t.Fail()
 	}
 
-	if node == nil {
-		return fmt.Errorf("tree is nil")
+	if ok {
+		t.Errorf("element must be not found")
+		t.Fail()
 	}
 
-	i := 0
-
-	for node != nil {
-		fmt.Println("---", i)
-
-		for _, child := range node.children {
-			fmt.Printf("\t%v\n", child)
-		}
-
-		node = node.next
-		i += 1
+	elem, ok, err := _tree.SearchElem(k2)
+	if err != nil {
+		t.Errorf("while searching:", err)
+		t.Fail()
 	}
 
-	return nil
+	if !ok {
+		t.Errorf("element must be found")
+		t.Fail()
+	}
+
+	cond := k2.CompareTo(elem.Key())
+	if cond != Equal {
+		t.Errorf("element must be same")
+		t.Fail()
+	}
+}
+
+func TestSearch(t *testing.T) {
+	k := testKey(50)
+
+	res, ok, err := _tree.Search(k)
+	if err != nil {
+		t.Errorf("while searching:", err)
+		t.Fail()
+	}
+
+	if !ok {
+		t.Errorf("element must be found")
+		t.Fail()
+	}
+
+	elem, ok := res.ElemAt(25)
+	if !ok {
+		t.Errorf("element+1 must be found")
+		t.Fail()
+	}
+
+	fmt.Println("---------", elem)
 }
 
 /*
