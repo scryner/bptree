@@ -8,7 +8,7 @@ import (
 var _tree *Bptree
 
 const (
-	_maxDegree    = 3
+	_maxDegree    = 5
 	_maxDepth     = 5
 	_allowOverlap = false
 )
@@ -51,7 +51,7 @@ func TestInit(t *testing.T) {
 }
 
 func TestInsert(t *testing.T) {
-	iMax := 10
+	iMax := 100
 
 	t.Logf("inserting 0 to %d (step by %d)", iMax, 2)
 

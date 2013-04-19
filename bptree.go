@@ -2,6 +2,7 @@ package bptree
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 )
@@ -84,7 +85,7 @@ func (tree *Bptree) Insert(elem Elem) error {
 	// insert element into last index node
 	lastPath := paths[len(paths)-1]
 
-	lastPath.children, err = lastPath.children.insert(elem, tree.maxDegree, tree.allowOverlap)
+	err = lastPath.insertElem(elem, tree.maxDegree, tree.allowOverlap)
 	if err != nil {
 		return err
 	}
@@ -124,33 +125,29 @@ func (tree *Bptree) Remove(key Key) error {
 		return err
 	}
 
-	// delete the element at belong node
-	lastPath := paths[len(paths)-1]
-
-	var ok bool
-	lastPath.children, ok = lastPath.children.delete(key, tree.maxDegree)
-	if !ok {
-		panic("element must be existed")
-	}
+	lenPaths := len(paths)
 
 	var allowedDegree int
+	var curr *indexNode
+
+	fmt.Printf("\nremoving paths:\n")
+	for _, p := range paths {
+		fmt.Printf("\t%v\n", p)
+	}
+	fmt.Printf("\n")
 
 	// do balancing if index node has children less than tree.maxDegree / 2
-	for i := len(paths) - 1; i >= 0; i-- {
-		path := paths[i]
+	for i := lenPaths - 1; i >= 0; i-- {
+		curr = paths[i]
 
-		if path.isInternal {
-			allowedDegree = tree.maxDegree / 2
-		} else {
-			allowedDegree = (tree.maxDegree - 1) / 2
-		}
+		fmt.Println("!!!!!!!!!!!!!!!!", curr)
 
-		if i == 0 {
-			if tree.root != path {
+		if i == 0 { // at root
+			if tree.root != curr {
 				panic("must should be root")
 			}
 
-			if len(path.children) == 0 {
+			if len(curr.children) == 0 {
 				if len(paths) > 1 {
 					tree.root = paths[1]
 				} else {
@@ -158,17 +155,34 @@ func (tree *Bptree) Remove(key Key) error {
 				}
 			}
 
-			break
-		} else {
-			if len(path.children) <= allowedDegree {
-				ok := tree.redistribution(paths[:i+1], allowedDegree)
+			return nil
+		}
 
-				if !ok {
-					err = tree.merge(paths[:i+1])
-					if err != nil {
-						return err
-					}
+		if curr.isInternal {
+			allowedDegree = tree.maxDegree / 2
+		} else {
+			allowedDegree = (tree.maxDegree - 1) / 2
+		}
+
+		if i == lenPaths-1 { // at first loop (last node in paths)
+			// delete the element at belong node
+			var ok bool
+			ok = curr.deleteElem(key, tree.maxDegree)
+			if !ok {
+				panic("element must be existed")
+			}
+		}
+
+		if len(curr.children) < allowedDegree {
+			ok := tree.redistribution(paths[:i+1], allowedDegree)
+
+			if !ok {
+				err = tree.merge(paths[:i+1])
+				if err != nil {
+					return err
 				}
+			} else {
+				fmt.Println("@@@@", curr)
 			}
 		}
 	}
@@ -299,12 +313,10 @@ func (tree *Bptree) balance(paths []*indexNode) error {
 	copy(next.children, currChildren[mid:])
 	curr.next = next
 
-	newParentChildren, err := parent.children.insert(next, tree.maxDegree, tree.allowOverlap)
+	err := parent.insertElem(next, tree.maxDegree, tree.allowOverlap)
 	if err != nil {
 		return err
 	}
-
-	parent.children = newParentChildren
 
 	/*
 		fmt.Println("curr:", curr)
@@ -328,7 +340,7 @@ func (tree *Bptree) redistribution(paths []*indexNode, allowedDegree int) bool {
 	curr = paths[lenPaths-1]
 
 	// get siblings
-	lSibling, rSibling := tree.findSiblings(parent, curr)
+	lSibling, rSibling := tree.findSiblings(parent, curr.Key())
 
 	var withLeft bool
 
@@ -347,11 +359,14 @@ func (tree *Bptree) redistribution(paths []*indexNode, allowedDegree int) bool {
 		}
 	}
 
+	fmt.Printf("\nredistribution(%v):\n\tcurr: %v\n\tsibl: %v, %v\n\n", withLeft, curr, lSibling, rSibling)
+
 	if withLeft {
 		// redistribution with left sibling
 		lsChildrenLen := len(lSibling.children)
 
 		if lsChildrenLen-1 <= allowedDegree {
+			fmt.Println("\tredistribution fail\n")
 			return false
 		}
 
@@ -368,6 +383,7 @@ func (tree *Bptree) redistribution(paths []*indexNode, allowedDegree int) bool {
 		rsChildrenLen := len(rSibling.children)
 
 		if rsChildrenLen-1 <= allowedDegree {
+			fmt.Println("\tredistribution fail\n")
 			return false
 		}
 
@@ -401,7 +417,7 @@ func (tree *Bptree) merge(paths []*indexNode) error {
 	}
 
 	// get siblings
-	lSibling, rSibling := tree.findSiblings(parent, curr)
+	lSibling, rSibling := tree.findSiblings(parent, curr.Key())
 
 	var withLeft bool
 
@@ -420,6 +436,8 @@ func (tree *Bptree) merge(paths []*indexNode) error {
 		}
 	}
 
+	fmt.Printf("\nmerge(%v):\n\tcurr: %v\n\tsibl: %v, %v\n\n", withLeft, curr, lSibling, rSibling)
+
 	if withLeft {
 		// merging with left sibling
 		if len(lSibling.children)+len(curr.children) > allowedDegree {
@@ -428,9 +446,12 @@ func (tree *Bptree) merge(paths []*indexNode) error {
 
 		lSibling.children = append(lSibling.children, curr.children...)
 		lSibling.next = curr.next
-		curr.next.prev = lSibling
 
-		parent.children, _ = parent.children.delete(curr.Key(), tree.maxDegree)
+		if curr.next != nil {
+			curr.next.prev = lSibling
+		}
+
+		parent.deleteElem(curr.Key(), tree.maxDegree)
 	} else {
 		// merging with right sibling
 		if len(rSibling.children)+len(curr.children) > allowedDegree {
@@ -439,18 +460,21 @@ func (tree *Bptree) merge(paths []*indexNode) error {
 
 		rSibling.children = append(curr.children, rSibling.children...)
 		rSibling.prev = curr.prev
-		curr.prev.next = rSibling
 
-		parent.children, _ = parent.children.delete(curr.Key(), tree.maxDegree)
+		if curr.prev != nil {
+			curr.prev.next = rSibling
+		}
+
+		parent.deleteElem(curr.Key(), tree.maxDegree)
 	}
 
 	return nil
 }
 
-func (tree *Bptree) findSiblings(parent, curr *indexNode) (left, right *indexNode) {
+func (tree *Bptree) findSiblings(parent *indexNode, key Key) (left, right *indexNode) {
 	pChildrenLen := len(parent.children)
 
-	i, equal := parent.children.find(curr.Key())
+	i, equal := parent.children.find(key)
 	if !equal {
 		panic("parent must have the duty of supporting")
 	}
@@ -460,7 +484,7 @@ func (tree *Bptree) findSiblings(parent, curr *indexNode) (left, right *indexNod
 	}
 
 	if i != pChildrenLen-1 {
-		right = parent.children[pChildrenLen-1].(*indexNode)
+		right = parent.children[i+1].(*indexNode)
 	}
 
 	return
