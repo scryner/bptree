@@ -2,7 +2,6 @@ package bptree
 
 import (
 	"errors"
-	"fmt"
 	"sort"
 	"sync"
 )
@@ -16,7 +15,7 @@ const (
 )
 
 type Key interface {
-	CompareTo(k Key) Cond
+	CompareTo(key Key) Cond
 }
 
 type Elem interface {
@@ -24,18 +23,17 @@ type Elem interface {
 }
 
 var (
-	ERR_NOT_INITIALIZED = errors.New("Bptree is not initialized")
-	ERR_EMPTY           = errors.New("empty tree")
-	ERR_NOT_FOUND       = errors.New("not found")
-	ERR_NOT_OVERLAPPED  = errors.New("element overlapped")
+	ERR_NOT_INITIALIZED  = errors.New("Bptree is not initialized")
+	ERR_EMPTY            = errors.New("empty tree")
+	ERR_NOT_FOUND        = errors.New("not found")
+	ERR_NOT_OVERLAPPED   = errors.New("element overlapped")
+	ERR_EXCEED_MAX_DEPTH = errors.New("tree reached to max depth")
 )
 
 type Bptree struct {
 	root *indexNode
 
 	maxDegree int
-
-	currDepth int
 	maxDepth  int
 
 	allowOverlap bool
@@ -55,10 +53,11 @@ func NewBptree(maxDegree, maxDepth int, allowOverlap bool) (*Bptree, error) {
 	}
 
 	return &Bptree{
-		maxDegree:   maxDegree,
-		maxDepth:    maxDepth,
-		lock:        new(sync.RWMutex),
-		initialized: true,
+		maxDegree:    maxDegree,
+		maxDepth:     maxDepth,
+		allowOverlap: allowOverlap,
+		lock:         new(sync.RWMutex),
+		initialized:  true,
 	}, nil
 }
 
@@ -66,6 +65,10 @@ func (tree *Bptree) Insert(elem Elem) error {
 	if !tree.initialized {
 		return ERR_NOT_INITIALIZED
 	}
+
+	// write lock
+	tree.lock.Lock()
+	defer tree.lock.Unlock()
 
 	// create root node if it is not exist
 	if tree.root == nil {
@@ -81,6 +84,11 @@ func (tree *Bptree) Insert(elem Elem) error {
 
 		tree.root = rnode
 		return nil
+	}
+
+	// check current node depth, actually tree could have tree.maxDepth + 1
+	if tree.root.depthToLeaf > tree.maxDepth {
+		return ERR_EXCEED_MAX_DEPTH
 	}
 
 	// find paths pass by
@@ -126,6 +134,10 @@ func (tree *Bptree) Remove(key Key) error {
 		return ERR_NOT_INITIALIZED
 	}
 
+	// lock
+	tree.lock.Lock()
+	defer tree.lock.Unlock()
+
 	// find paths
 	paths, err := tree.findToExactElem(key)
 	if err != nil {
@@ -137,17 +149,19 @@ func (tree *Bptree) Remove(key Key) error {
 	var allowedDegree int
 	var curr *indexNode
 
-	fmt.Printf("\nremoving paths:\n")
-	for _, p := range paths {
-		fmt.Printf("\t%v\n", p)
-	}
-	fmt.Printf("\n")
+	/*
+		fmt.Printf("\nremoving paths:\n")
+		for _, p := range paths {
+			fmt.Printf("\t%v\n", p)
+		}
+		fmt.Printf("\n")
+	*/
 
 	// do balancing if index node has children less than tree.maxDegree / 2
 	for i := lenPaths - 1; i >= 0; i-- {
 		curr = paths[i]
 
-		fmt.Println("!!!!!!!!!!!!!!!!", curr)
+		// fmt.Println("!!!!!!!!!!!!!!!!", curr)
 
 		if i == 0 { // at root
 			if tree.root != curr {
@@ -188,8 +202,8 @@ func (tree *Bptree) Remove(key Key) error {
 				if err != nil {
 					return err
 				}
-			} else {
-				fmt.Println("@@@@", curr)
+				// } else {
+				// fmt.Println("@@@@", curr)
 			}
 		}
 	}
@@ -199,6 +213,10 @@ func (tree *Bptree) Remove(key Key) error {
 
 func (tree *Bptree) SearchElem(key Key) (elem Elem, ok bool, err error) {
 	var res *SearchResult
+
+	// read lock
+	tree.lock.RLock()
+	defer tree.lock.RUnlock()
 
 	res, ok, err = tree.Search(key)
 	if err != nil || !ok {
@@ -215,6 +233,10 @@ func (tree *Bptree) Search(key Key) (res *SearchResult, ok bool, err error) {
 		err = ERR_NOT_INITIALIZED
 		return
 	}
+
+	// read lock
+	tree.lock.RLock()
+	defer tree.lock.RUnlock()
 
 	// find paths
 	paths, e := tree.findToExactElem(key)
@@ -235,8 +257,10 @@ func (tree *Bptree) Search(key Key) (res *SearchResult, ok bool, err error) {
 	}
 
 	res = &SearchResult{
-		node: node,
-		i:    i,
+		node:      node,
+		i:         i,
+		matchElem: node.children[i],
+		treeLock:  tree.lock,
 	}
 
 	ok = true
@@ -407,14 +431,14 @@ func (tree *Bptree) redistribution(paths []*indexNode, allowedDegree int) bool {
 		}
 	}
 
-	fmt.Printf("\nredistribution(%v):\n\tcurr: %v\n\tsibl: %v, %v\n\n", withLeft, curr, lSibling, rSibling)
+	// fmt.Printf("\nredistribution(%v):\n\tcurr: %v\n\tsibl: %v, %v\n\n", withLeft, curr, lSibling, rSibling)
 
 	if withLeft {
 		// redistribution with left sibling
 		lsChildrenLen := len(lSibling.children)
 
 		if lsChildrenLen-1 <= allowedDegree {
-			fmt.Println("\tredistribution fail\n")
+			// fmt.Println("\tredistribution fail\n")
 			return false
 		}
 
@@ -431,7 +455,7 @@ func (tree *Bptree) redistribution(paths []*indexNode, allowedDegree int) bool {
 		rsChildrenLen := len(rSibling.children)
 
 		if rsChildrenLen-1 <= allowedDegree {
-			fmt.Println("\tredistribution fail\n")
+			// fmt.Println("\tredistribution fail\n")
 			return false
 		}
 
@@ -484,7 +508,7 @@ func (tree *Bptree) merge(paths []*indexNode) error {
 		}
 	}
 
-	fmt.Printf("\nmerge(%v):\n\tcurr: %v\n\tsibl: %v, %v\n\n", withLeft, curr, lSibling, rSibling)
+	// fmt.Printf("\nmerge(%v):\n\tcurr: %v\n\tsibl: %v, %v\n\n", withLeft, curr, lSibling, rSibling)
 
 	if withLeft {
 		// merging with left sibling

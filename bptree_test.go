@@ -200,13 +200,30 @@ func TestSearch(t *testing.T) {
 		t.Fail()
 	}
 
-	elem, ok := res.ElemAt(25)
+	elem, ok := res.ElemAt(-24)
 	if !ok {
-		t.Errorf("element+1 must be found")
+		t.Errorf("element must be found")
 		t.Fail()
 	}
 
 	fmt.Println("---------", elem)
+
+	elems, n := res.ElemRange(100)
+	/*
+		if n != 11 {
+			t.Errorf("elemnts length is not matched")
+			t.Fail()
+		}
+	*/
+
+	fmt.Println(elems, n)
+	fmt.Println(_tree.root.depthToLeaf)
+
+	elems, n = res.ElemRangeTo(testKey(71), ToRight, 100)
+	fmt.Println("!!!", elems, n)
+
+	elems, n = res.ElemRangeTo(testKey(21), ToLeft, 100)
+	fmt.Println("!!!", elems, n)
 }
 
 /*
