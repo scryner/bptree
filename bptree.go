@@ -23,11 +23,13 @@ type Elem interface {
 }
 
 var (
-	ERR_NOT_INITIALIZED  = errors.New("Bptree is not initialized")
-	ERR_EMPTY            = errors.New("empty tree")
-	ERR_NOT_FOUND        = errors.New("not found")
-	ERR_NOT_OVERLAPPED   = errors.New("element overlapped")
-	ERR_EXCEED_MAX_DEPTH = errors.New("tree reached to max depth")
+	ERR_NOT_INITIALIZED    = errors.New("Bptree is not initialized")
+	ERR_EMPTY              = errors.New("empty tree")
+	ERR_NOT_FOUND          = errors.New("not found")
+	ERR_NOT_OVERLAPPED     = errors.New("element overlapped")
+	ERR_EXCEED_MAX_DEPTH   = errors.New("tree reached to max depth")
+	ERR_SEARCH_OVERFLOWED  = errors.New("search overflowed")
+	ERR_SEARCH_UNDERFLOWED = errors.New("search underflowed")
 )
 
 type Bptree struct {
@@ -214,16 +216,65 @@ func (tree *Bptree) Remove(key Key) error {
 func (tree *Bptree) SearchElem(key Key) (elem Elem, ok bool, err error) {
 	var res *SearchResult
 
-	// read lock
-	tree.lock.RLock()
-	defer tree.lock.RUnlock()
-
 	res, ok, err = tree.Search(key)
 	if err != nil || !ok {
 		return
 	}
 
 	elem = res.Elem()
+
+	return
+}
+
+func (tree *Bptree) SearchElemNearby(key Key, direction Direction) (elem Elem, equal bool, err error) {
+	if !tree.initialized {
+		err = ERR_NOT_INITIALIZED
+		return
+	}
+
+	// read lock
+	tree.lock.RLock()
+	defer tree.lock.RUnlock()
+
+	// find paths
+	paths, _ := tree.findToExactElem(key)
+
+	if len(paths) == 0 {
+		return
+	}
+
+	node := paths[len(paths)-1]
+
+	i, equal := node.children.find(key)
+	if equal {
+		elem = node.children[i]
+	} else {
+		switch direction {
+		case ToRight:
+			if i == len(node.children) {
+				if node.next == nil {
+					err = ERR_SEARCH_OVERFLOWED
+					return
+				}
+
+				elem = node.next.children[0]
+			} else {
+				elem = node.children[i]
+			}
+
+		case ToLeft:
+			if i == 0 {
+				if node.prev == nil {
+					err = ERR_SEARCH_UNDERFLOWED
+					return
+				}
+
+				elem = node.prev.children[len(node.prev.children)-1]
+			} else {
+				elem = node.children[i-1]
+			}
+		}
+	}
 
 	return
 }

@@ -226,6 +226,18 @@ func TestSearch(t *testing.T) {
 	fmt.Println("!!!", elems, n)
 }
 
+func TestSearchNearby(t *testing.T) {
+	k := testKey(31)
+
+	elem, equal, err := _tree.SearchElemNearby(k, ToLeft)
+	if err != nil {
+		t.Errorf("searching nearby err:", err)
+		t.Fail()
+	}
+
+	fmt.Println("%%%%", elem, equal)
+}
+
 /*
 func TestOverlappedinserting(t *testing.T) {
 	err := _tree.Insert(&testElem{2})
