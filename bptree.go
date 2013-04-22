@@ -214,6 +214,19 @@ func (tree *Bptree) SearchElem(key Key) (elem Elem, ok bool, err error) {
 }
 
 func (tree *Bptree) SearchElemNearby(key Key, direction Direction) (elem Elem, equal bool, err error) {
+	var res *SearchResult
+
+	res, equal, err = tree.SearchNearby(key, direction)
+	if err != nil {
+		return
+	}
+
+	elem = res.Elem()
+
+	return
+}
+
+func (tree *Bptree) SearchNearby(key Key, direction Direction) (res *SearchResult, equal bool, err error) {
 	if !tree.initialized {
 		err = ERR_NOT_INITIALIZED
 		return
@@ -222,6 +235,8 @@ func (tree *Bptree) SearchElemNearby(key Key, direction Direction) (elem Elem, e
 	// read lock
 	tree.lock.RLock()
 	defer tree.lock.RUnlock()
+
+	var elem Elem
 
 	// find paths
 	paths, _ := tree.findToExactElem(key)
@@ -262,6 +277,13 @@ func (tree *Bptree) SearchElemNearby(key Key, direction Direction) (elem Elem, e
 				elem = node.children[i-1]
 			}
 		}
+	}
+
+	res = &SearchResult{
+		node:      node,
+		i:         i,
+		matchElem: elem,
+		treeLock:  tree.lock,
 	}
 
 	return
