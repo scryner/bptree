@@ -26,7 +26,7 @@ var (
 	ERR_NOT_INITIALIZED    = errors.New("Bptree is not initialized")
 	ERR_EMPTY              = errors.New("empty tree")
 	ERR_NOT_FOUND          = errors.New("not found")
-	ERR_NOT_OVERLAPPED     = errors.New("element overlapped")
+	ERR_OVERLAPPED         = errors.New("element overlapped")
 	ERR_EXCEED_MAX_DEPTH   = errors.New("tree reached to max depth")
 	ERR_SEARCH_OVERFLOWED  = errors.New("search overflowed")
 	ERR_SEARCH_UNDERFLOWED = errors.New("search underflowed")
@@ -373,7 +373,7 @@ func (tree *Bptree) find(key Key, idxAdjust func(*indexNode, int, bool) (int, er
 func (tree *Bptree) findToInsert(key Key) (paths []*indexNode, err error) {
 	return tree.find(key, func(node *indexNode, idx int, isEqual bool) (int, error) {
 		if isEqual && !tree.allowOverlap {
-			return -1, ERR_NOT_OVERLAPPED
+			return -1, ERR_OVERLAPPED
 		}
 
 		idx -= 1
