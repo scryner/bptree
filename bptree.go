@@ -120,7 +120,6 @@ func (tree *Bptree) Insert(elem Elem) error {
 		}
 
 		if len(path.children) > allowedDegree {
-			// fmt.Println("rebalancing:", paths[:i+1])
 			err = tree.balance(paths[:i+1])
 			if err != nil {
 				return err
@@ -151,19 +150,9 @@ func (tree *Bptree) Remove(key Key) error {
 	var allowedDegree int
 	var curr *indexNode
 
-	/*
-		fmt.Printf("\nremoving paths:\n")
-		for _, p := range paths {
-			fmt.Printf("\t%v\n", p)
-		}
-		fmt.Printf("\n")
-	*/
-
 	// do balancing if index node has children less than tree.maxDegree / 2
 	for i := lenPaths - 1; i >= 0; i-- {
 		curr = paths[i]
-
-		// fmt.Println("!!!!!!!!!!!!!!!!", curr)
 
 		if i == 0 { // at root
 			if tree.root != curr {
@@ -204,8 +193,6 @@ func (tree *Bptree) Remove(key Key) error {
 				if err != nil {
 					return err
 				}
-				// } else {
-				// fmt.Println("@@@@", curr)
 			}
 		}
 	}
@@ -428,7 +415,7 @@ func (tree *Bptree) balance(paths []*indexNode) error {
 		children:    make([]Elem, len(currChildren)-mid, tree.maxDegree+1),
 		depthToLeaf: curr.depthToLeaf,
 		isInternal:  curr.isInternal,
-		next:        nil,
+		next:        curr.next,
 		prev:        curr,
 	}
 
@@ -436,16 +423,14 @@ func (tree *Bptree) balance(paths []*indexNode) error {
 	copy(next.children, currChildren[mid:])
 	curr.next = next
 
+	if next.next != nil {
+		next.next.prev = next
+	}
+
 	err := parent.insertElem(next, tree.maxDegree, tree.allowOverlap)
 	if err != nil {
 		return err
 	}
-
-	/*
-		fmt.Println("curr:", curr)
-		fmt.Println("next:", next)
-		fmt.Println("parent:", parent)
-	*/
 
 	return nil
 }
@@ -482,14 +467,11 @@ func (tree *Bptree) redistribution(paths []*indexNode, allowedDegree int) bool {
 		}
 	}
 
-	// fmt.Printf("\nredistribution(%v):\n\tcurr: %v\n\tsibl: %v, %v\n\n", withLeft, curr, lSibling, rSibling)
-
 	if withLeft {
 		// redistribution with left sibling
 		lsChildrenLen := len(lSibling.children)
 
 		if lsChildrenLen-1 <= allowedDegree {
-			// fmt.Println("\tredistribution fail\n")
 			return false
 		}
 
@@ -506,7 +488,6 @@ func (tree *Bptree) redistribution(paths []*indexNode, allowedDegree int) bool {
 		rsChildrenLen := len(rSibling.children)
 
 		if rsChildrenLen-1 <= allowedDegree {
-			// fmt.Println("\tredistribution fail\n")
 			return false
 		}
 
@@ -558,8 +539,6 @@ func (tree *Bptree) merge(paths []*indexNode) error {
 			withLeft = false
 		}
 	}
-
-	// fmt.Printf("\nmerge(%v):\n\tcurr: %v\n\tsibl: %v, %v\n\n", withLeft, curr, lSibling, rSibling)
 
 	if withLeft {
 		// merging with left sibling
