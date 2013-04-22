@@ -335,7 +335,7 @@ func (tree *Bptree) find(key Key, idxAdjust func(*indexNode, int, bool) (int, er
 
 	node := tree.root
 	if node == nil {
-		return nil, errors.New("empty tree")
+		return nil, ERR_EMPTY
 	}
 
 	for node != nil {
@@ -406,7 +406,7 @@ func (tree *Bptree) balance(paths []*indexNode) error {
 	lenPaths := len(paths)
 
 	if lenPaths == 0 {
-		return errors.New("paths are empty")
+		return ERR_EMPTY
 	}
 
 	var parent, curr, next *indexNode

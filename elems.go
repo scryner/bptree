@@ -1,7 +1,6 @@
 package bptree
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 )
@@ -38,7 +37,7 @@ func (elems Elems) insert(elem Elem, maxDegree int, allowOverlap bool) (Elems, e
 	}
 
 	if equal && !allowOverlap {
-		return nil, errors.New("element overlapped")
+		return nil, ERR_OVERLAPPED
 	}
 
 	newElems := make(Elems, len(elems)+1, maxDegree+1)
