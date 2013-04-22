@@ -227,6 +227,7 @@ func (tree *Bptree) SearchElemNearby(key Key, direction Direction) (elem Elem, e
 	paths, _ := tree.findToExactElem(key)
 
 	if len(paths) == 0 {
+		err = ERR_EMPTY
 		return
 	}
 
@@ -284,6 +285,7 @@ func (tree *Bptree) Search(key Key) (res *SearchResult, ok bool, err error) {
 	}
 
 	if len(paths) == 0 {
+		err = ERR_EMPTY
 		return
 	}
 
