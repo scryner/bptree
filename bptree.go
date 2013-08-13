@@ -23,6 +23,7 @@ type Elem interface {
 }
 
 var (
+	// errors
 	ERR_NOT_INITIALIZED    = errors.New("Bptree is not initialized")
 	ERR_EMPTY              = errors.New("empty tree")
 	ERR_NOT_FOUND          = errors.New("not found")

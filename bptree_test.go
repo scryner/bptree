@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"sort"
 	"testing"
+	"time"
 )
 
 var _tree *Bptree
@@ -415,4 +416,27 @@ func TestSearchElemNearby(t *testing.T) {
 		t.Errorf("SearchElemNearby to right result is invalid")
 		t.Fail()
 	}
+}
+
+func TestRecognizableBptree(t *testing.T) {
+	rbptree, err := NewRecognizableBptree(_maxDegree, _maxDepth, _allowOverlap)
+	if err != nil {
+		t.Errorf("while creating recognizable bptree: %v", err)
+		t.FailNow()
+	}
+
+	notify := rbptree.AddWatch()
+
+	rbptree.Insert(&testElem{0})
+
+	timeout := time.After(time.Second)
+	select {
+	case <-notify:
+		return
+	case <-timeout:
+		t.Errorf("timeouted")
+		t.FailNow()
+	}
+
+	panic(`never reached`)
 }
