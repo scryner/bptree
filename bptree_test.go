@@ -2,6 +2,7 @@ package bptree
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"sort"
 	"testing"
@@ -47,35 +48,8 @@ func (ele *testElem) Key() Key {
 	return testKey(ele.val)
 }
 
-func printTree(tree *Bptree) error {
-	node := tree.root
-
-	for node != nil {
-		if !node.isInternal {
-			break
-		}
-
-		node = node.children[0].(*indexNode)
-	}
-
-	if node == nil {
-		return fmt.Errorf("tree is nil")
-	}
-
-	i := 0
-
-	for node != nil {
-		fmt.Println("leaf ---", i)
-
-		for _, child := range node.children {
-			fmt.Printf("\t%v\n", child)
-		}
-
-		node = node.next
-		i += 1
-	}
-
-	return nil
+func (ele *testElem) String() string {
+	return fmt.Sprintf("%d", ele.val)
 }
 
 func TestInit(t *testing.T) {
@@ -105,6 +79,8 @@ func TestInsert(t *testing.T) {
 			t.FailNow()
 		}
 	}
+
+	// PrintTree(_tree)
 }
 
 func TestSearchElem(t *testing.T) {
@@ -439,4 +415,34 @@ func TestRecognizableBptree(t *testing.T) {
 	}
 
 	panic(`never reached`)
+}
+
+func TestElemRangeToIfThereIsOneElementInTree(t *testing.T) {
+	_tree2, err := NewBptree(_maxDegree, _maxDepth, true)
+	if err != nil {
+		t.Errorf("while initializing bptree: %v", err)
+		t.FailNow()
+	}
+
+	err = _tree2.Insert(&testElem{10})
+	if err != nil {
+		t.Errorf("while inserting element: %v", err)
+		t.FailNow()
+	}
+
+	res, _, err := _tree2.SearchNearby(testKey(12), ToLeft)
+	if err != nil {
+		t.Errorf("while searching nearby: %v", err)
+		t.FailNow()
+	}
+
+	elems, n := res.ElemRangeTo(testKey(0), ToLeft, math.MaxUint32)
+	if n != 1 {
+		t.Errorf("elems length must be 1, but %d", n)
+		t.FailNow()
+	}
+	if elems == nil {
+		t.Errorf("elems must be existed")
+		t.FailNow()
+	}
 }

@@ -2,6 +2,7 @@ package bptree
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 )
@@ -148,6 +149,19 @@ func (tree *Bptree) Remove(key Key) error {
 
 	lenPaths := len(paths)
 
+	// if only root is existed
+	if lenPaths == 1 {
+		root := paths[0]
+
+		ok := root.deleteElem(key, tree.maxDegree)
+		if !ok {
+			treePrinted, _ := printTreeToString(tree)
+			panic(fmt.Sprintf("element must be existed in root\n%s\n", treePrinted))
+		}
+
+		return nil
+	}
+
 	var allowedDegree int
 	var curr *indexNode
 
@@ -182,7 +196,8 @@ func (tree *Bptree) Remove(key Key) error {
 			var ok bool
 			ok = curr.deleteElem(key, tree.maxDegree)
 			if !ok {
-				panic("element must be existed")
+				treePrinted, _ := printTreeToString(tree)
+				panic(fmt.Sprintf("element must be existed\n%s\n", treePrinted))
 			}
 		}
 
@@ -273,9 +288,12 @@ func (tree *Bptree) SearchNearby(key Key, direction Direction) (res *SearchResul
 					return
 				}
 
-				elem = node.prev.children[len(node.prev.children)-1]
+				node = node.prev
+				i = len(node.children) - 1
+				elem = node.prev.children[i]
 			} else {
-				elem = node.children[i-1]
+				i -= 1
+				elem = node.children[i]
 			}
 		}
 	}
@@ -302,9 +320,13 @@ func (tree *Bptree) Search(key Key) (res *SearchResult, ok bool, err error) {
 
 	// find paths
 	paths, e := tree.findToExactElem(key)
-	if e != nil && e != ERR_NOT_FOUND {
-		err = e
-		return
+	if e != nil {
+		if e != ERR_NOT_FOUND {
+			err = e
+			return
+		} else {
+			return
+		}
 	}
 
 	if len(paths) == 0 {
