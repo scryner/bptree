@@ -44,6 +44,16 @@ func (tree *RecognizableBptree) AddWatch() <-chan int {
 	return ch
 }
 
+func (tree *RecognizableBptree) notify() {
+	for v := range tree.notifyQueue.Iter() {
+		ch := v.(chan int)
+
+		go func() {
+			ch <- 1
+		}()
+	}
+}
+
 func (tree *RecognizableBptree) Insert(elem Elem) error {
 	tree.lastModifiedLock.Lock()
 	defer tree.lastModifiedLock.Unlock()
@@ -55,13 +65,23 @@ func (tree *RecognizableBptree) Insert(elem Elem) error {
 		return err
 	}
 
-	for v := range tree.notifyQueue.Iter() {
-		ch := v.(chan int)
+	tree.notify()
 
-		go func() {
-			ch <- 1
-		}()
+	return nil
+}
+
+func (tree *RecognizableBptree) Remove(key Key) error {
+	tree.lastModifiedLock.Lock()
+	defer tree.lastModifiedLock.Unlock()
+
+	tree.lastModified = time.Now().UnixNano()
+
+	err := tree.Bptree.Remove(key)
+	if err != nil {
+		return err
 	}
+
+	tree.notify()
 
 	return nil
 }
